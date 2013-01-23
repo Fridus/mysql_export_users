@@ -1,0 +1,89 @@
+#!/bin/bash
+
+usage() {
+cat << EOF
+usage: $0 options
+
+Export mysql users
+
+OPTIONS:
+   -u      User
+   -p      Password
+      --password=...
+   -s      Selects a specific user
+   -h      Host
+
+EOF
+}
+
+_USER=
+_PASSWORD=
+_HOST=
+_SUSER=
+
+while getopts “h:s:u:p-:” OPTION
+do
+  case $OPTION in
+    -)
+      case "${OPTARG}" in
+        password=*)
+          val=${OPTARG#*=}
+          _PASSWORD=${val}
+          ;;
+        help)
+      usage
+      	  exit
+		  ;;
+      esac;;
+    h)
+      _HOST=$OPTARG
+      ;;
+    s)
+      _SUSER=$OPTARG
+      ;;
+    u)
+      _USER=$OPTARG
+      ;;
+    p)
+      OLDSTTY=$(stty -g)
+      stty -echo
+      read -p "Enter password: " _PASSWORD
+      stty $OLDSTTY
+      echo
+      ;;
+    ?)
+      usage
+      exit
+      ;;
+  esac
+done
+
+MYSQLCONNECT="mysql"
+MYSQLFILTER=""
+
+### generate command
+
+if test ! -z $_HOST
+then
+	MYSQLCONNECT+=" -h "$_HOST
+fi
+
+if test ! -z $_USER
+then
+	MYSQLCONNECT+=" -u "$_USER
+fi
+
+if test ! -z $_PASSWORD
+then
+	MYSQLCONNECT+=" -p'$_PASSWORD'"
+fi
+
+if test ! -z $_SUSER
+then
+	MYSQLFILTER+=' | grep  $_SUSER'
+fi
+
+MYSQLCOMMAND="$MYSQLCONNECT -B -N -e \"SELECT DISTINCT CONCAT('SHOW GRANTS FOR ''',user,'''@''',host,''';') AS query FROM user\" mysql | $MYSQLCONNECT $MYSQLFILTER | sed 's/Grants for .*/#### &/' | sed 's/$/;/'"
+eval ${MYSQLCOMMAND}
+
+exit 0
